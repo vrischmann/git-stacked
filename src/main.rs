@@ -72,11 +72,13 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
     Ok(branches_vec)
 }
 
+type ParentOfMap = HashMap<String, String>;
+
 fn get_parent_of_relationships(
     repo: &Repository,
     branches_vec: &Vec<BranchInfo>,
-) -> Result<HashMap<String, String>, Error> {
-    let mut parent_of: HashMap<String, String> = HashMap::new();
+) -> Result<ParentOfMap, Error> {
+    let mut parent_of: ParentOfMap = HashMap::new();
 
     for child_branch_info in branches_vec {
         let child_name = &child_branch_info.name;
@@ -139,7 +141,7 @@ struct ChildrenAndRoots {
 
 fn build_children_and_roots(
     branches_vec: &Vec<BranchInfo>,
-    parent_of: &HashMap<String, String>,
+    parent_of: &ParentOfMap,
 ) -> Result<ChildrenAndRoots, Error> {
     let mut children_map: BTreeMap<String, Vec<String>> = BTreeMap::new(); // BTreeMap for sorted keys
     let mut all_branch_names_set: HashSet<String> = HashSet::new();
@@ -178,7 +180,7 @@ fn build_children_and_roots(
 
 fn print_tree(
     branches_vec: &Vec<BranchInfo>,
-    parent_of: &HashMap<String, String>,
+    parent_of: &ParentOfMap,
     children_map: &BTreeMap<String, Vec<String>>,
     roots: &Vec<String>,
 ) -> Result<(), Error> {
