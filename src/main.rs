@@ -25,6 +25,8 @@ struct BranchInfo {
 
 struct ParentOfMap(HashMap<String, String>);
 
+// Represents the parent-child relationships between branches.
+// The key is the parent branch name, the values is a vector of child branch names.
 struct ChildrenMap(BTreeMap<String, Vec<String>>); // BTreeMap for sorted keys
 
 // Prints the ASCII tree structure in children_map recursively.
@@ -150,39 +152,37 @@ fn build_children_and_roots(
     parent_of: &ParentOfMap,
 ) -> Result<ChildrenAndRoots, Error> {
     let mut children_map = ChildrenMap(BTreeMap::new());
-    let mut all_branch_names_set: HashSet<String> = HashSet::new();
+
+    let mut all_branch_names: HashSet<String> = HashSet::new();
     for bi in branches {
-        all_branch_names_set.insert(bi.name.clone());
+        all_branch_names.insert(bi.name.clone());
     }
 
-    let mut children_with_parents_set: HashSet<String> = HashSet::new();
-
+    let mut children_with_parents: HashSet<String> = HashSet::new();
     for (child, parent) in &parent_of.0 {
         children_map
             .0
             .entry(parent.clone())
             .or_default()
             .push(child.clone());
-        children_with_parents_set.insert(child.clone());
+        children_with_parents.insert(child.clone());
     }
 
     // Sort children within each parent's list for deterministic output
-    for children_list in children_map.0.values_mut() {
-        children_list.sort();
+    for children in children_map.0.values_mut() {
+        children.sort();
     }
 
-    let mut roots: Vec<String> = all_branch_names_set
-        .difference(&children_with_parents_set)
+    let mut roots: Vec<String> = all_branch_names
+        .difference(&children_with_parents)
         .cloned()
         .collect();
     roots.sort(); // Sort roots for deterministic output
 
-    let res = ChildrenAndRoots {
+    Ok(ChildrenAndRoots {
         children_map,
         roots,
-    };
-
-    Ok(res)
+    })
 }
 
 // Prints the branch tree structure based on the branches, parent-child relationships, and roots.
