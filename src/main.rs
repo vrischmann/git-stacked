@@ -27,6 +27,7 @@ struct ParentOfMap(HashMap<String, String>);
 
 struct ChildrenMap(BTreeMap<String, Vec<String>>); // BTreeMap for sorted keys
 
+// Prints the ASCII tree structure in children_map recursively.
 fn print_ascii_tree_recursive(
     parent_branch_name: &str,
     children_map: &ChildrenMap,
@@ -53,6 +54,7 @@ fn print_ascii_tree_recursive(
     }
 }
 
+// Retrieves all local branches in the repository and returns their names and OIDs.
 fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
     let mut branches_vec: Vec<BranchInfo> = Vec::new();
     let mut branch_iter = repo.branches(Some(BranchType::Local))?;
@@ -76,6 +78,7 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
     Ok(branches_vec)
 }
 
+// Determines the parent-child relationships between branches based on their OIDs.
 fn get_parent_of_relationships(
     repo: &Repository,
     branches_vec: &Vec<BranchInfo>,
@@ -141,6 +144,7 @@ struct ChildrenAndRoots {
     roots: Vec<String>,
 }
 
+// Builds the children_map and identifies root branches based on parent-child relationships.
 fn build_children_and_roots(
     branches_vec: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
@@ -181,6 +185,7 @@ fn build_children_and_roots(
     Ok(res)
 }
 
+// Prints the branch tree structure based on the branches, parent-child relationships, and roots.
 fn print_tree(
     branches_vec: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
