@@ -56,14 +56,14 @@ fn print_ascii_tree_recursive(
 
 // Retrieves all local branches in the repository and returns their names and OIDs.
 fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
-    let mut branches_vec: Vec<BranchInfo> = Vec::new();
+    let mut branches: Vec<BranchInfo> = Vec::new();
     let mut branch_iter = repo.branches(Some(BranchType::Local))?;
 
     while let Some(branch_result) = branch_iter.next() {
         let (branch, _) = branch_result?;
 
         if let (Some(name_ref), Some(target_oid)) = (branch.name()?, branch.get().target()) {
-            branches_vec.push(BranchInfo {
+            branches.push(BranchInfo {
                 name: name_ref.to_string(),
                 oid: target_oid,
             });
@@ -75,24 +75,24 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
         }
     }
 
-    Ok(branches_vec)
+    Ok(branches)
 }
 
 // Determines the parent-child relationships between branches based on their OIDs.
 fn get_parent_of_relationships(
     repo: &Repository,
-    branches_vec: &Vec<BranchInfo>,
+    branches: &Vec<BranchInfo>,
 ) -> Result<ParentOfMap, Error> {
     let mut parent_of = ParentOfMap(HashMap::new());
 
-    for child_branch_info in branches_vec {
+    for child_branch_info in branches {
         let child_name = &child_branch_info.name;
         let child_oid = child_branch_info.oid;
 
         let mut current_best_parent_name: Option<String> = None;
         let mut current_best_parent_oid: Option<Oid> = None;
 
-        for potential_parent_info in branches_vec {
+        for potential_parent_info in branches {
             let potential_parent_name = &potential_parent_info.name;
             let potential_parent_oid = potential_parent_info.oid;
 
@@ -146,12 +146,12 @@ struct ChildrenAndRoots {
 
 // Builds the children_map and identifies root branches based on parent-child relationships.
 fn build_children_and_roots(
-    branches_vec: &Vec<BranchInfo>,
+    branches: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
 ) -> Result<ChildrenAndRoots, Error> {
     let mut children_map = ChildrenMap(BTreeMap::new());
     let mut all_branch_names_set: HashSet<String> = HashSet::new();
-    for bi in branches_vec {
+    for bi in branches {
         all_branch_names_set.insert(bi.name.clone());
     }
 
@@ -187,7 +187,7 @@ fn build_children_and_roots(
 
 // Prints the branch tree structure based on the branches, parent-child relationships, and roots.
 fn print_tree(
-    branches_vec: &Vec<BranchInfo>,
+    branches: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
     children_map: &ChildrenMap,
     roots: &Vec<String>,
@@ -195,19 +195,19 @@ fn print_tree(
     let mainline_branch_names: HashSet<&str> =
         MAINLINE_BRANCH_NAMES_ARRAY.iter().cloned().collect();
 
-    if roots.is_empty() && !branches_vec.is_empty() {
+    if roots.is_empty() && !branches.is_empty() {
         if !&parent_of.0.is_empty() {
             // Structure exists but no clear roots (e.g. cycle, though unlikely)
             eprintln!(
                 "Warning: Could not determine clear root(s) for branch tree. Check for unusual branch structures."
             );
-            for bi in branches_vec {
+            for bi in branches {
                 // Fallback: print all branches flatly
                 println!("{}", bi.name);
             }
         } else {
             // No parents found, all branches are effectively roots
-            for bi in branches_vec {
+            for bi in branches {
                 let display_name = if mainline_branch_names.contains(bi.name.as_str()) {
                     bi.name.clone()
                 } else {
@@ -248,26 +248,26 @@ fn do_it() -> Result<(), Error> {
     let repo = Repository::open(repo_path)?;
 
     // 1. Get local branches info (name and OID)
-    let mut branches_vec = get_branches(&repo)?;
+    let mut branches = get_branches(&repo)?;
 
     // Sort branch names for deterministic processing
-    branches_vec.sort_by(|a, b| a.name.cmp(&b.name));
+    branches.sort_by(|a, b| a.name.cmp(&b.name));
 
-    if branches_vec.is_empty() {
+    if branches.is_empty() {
         return Ok(());
     }
 
     // 2. Determine parent_of relationships
-    let parent_of = get_parent_of_relationships(&repo, &branches_vec)?;
+    let parent_of = get_parent_of_relationships(&repo, &branches)?;
 
     // 3. Build children_map (sorted by key for consistent iteration order) and identify roots
     let ChildrenAndRoots {
         children_map,
         roots,
-    } = build_children_and_roots(&branches_vec, &parent_of)?;
+    } = build_children_and_roots(&branches, &parent_of)?;
 
     // 4. Handle edge cases for printing & actual printing
-    print_tree(&branches_vec, &parent_of, &children_map, &roots)?;
+    print_tree(&branches, &parent_of, &children_map, &roots)?;
 
     Ok(())
 }
