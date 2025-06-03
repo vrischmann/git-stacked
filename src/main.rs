@@ -23,12 +23,16 @@ struct BranchInfo {
     oid: Oid,
 }
 
+struct ParentOfMap(HashMap<String, String>);
+
+struct ChildrenMap(BTreeMap<String, Vec<String>>); // BTreeMap for sorted keys
+
 fn print_ascii_tree_recursive(
     parent_branch_name: &str,
-    children_map: &BTreeMap<String, Vec<String>>,
+    children_map: &ChildrenMap,
     current_prefix: &str,
 ) {
-    if let Some(children_names) = children_map.get(parent_branch_name) {
+    if let Some(children_names) = children_map.0.get(parent_branch_name) {
         let num_children = children_names.len();
         for (i, child_name) in children_names.iter().enumerate() {
             let is_last_child = i == num_children - 1;
@@ -72,13 +76,11 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
     Ok(branches_vec)
 }
 
-type ParentOfMap = HashMap<String, String>;
-
 fn get_parent_of_relationships(
     repo: &Repository,
     branches_vec: &Vec<BranchInfo>,
 ) -> Result<ParentOfMap, Error> {
-    let mut parent_of: ParentOfMap = HashMap::new();
+    let mut parent_of = ParentOfMap(HashMap::new());
 
     for child_branch_info in branches_vec {
         let child_name = &child_branch_info.name;
@@ -127,7 +129,7 @@ fn get_parent_of_relationships(
             }
         }
         if let Some(p_name) = current_best_parent_name {
-            parent_of.insert(child_name.clone(), p_name);
+            parent_of.0.insert(child_name.clone(), p_name);
         }
     }
 
@@ -135,7 +137,7 @@ fn get_parent_of_relationships(
 }
 
 struct ChildrenAndRoots {
-    children_map: BTreeMap<String, Vec<String>>,
+    children_map: ChildrenMap,
     roots: Vec<String>,
 }
 
@@ -143,7 +145,7 @@ fn build_children_and_roots(
     branches_vec: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
 ) -> Result<ChildrenAndRoots, Error> {
-    let mut children_map: BTreeMap<String, Vec<String>> = BTreeMap::new(); // BTreeMap for sorted keys
+    let mut children_map = ChildrenMap(BTreeMap::new());
     let mut all_branch_names_set: HashSet<String> = HashSet::new();
     for bi in branches_vec {
         all_branch_names_set.insert(bi.name.clone());
@@ -151,8 +153,9 @@ fn build_children_and_roots(
 
     let mut children_with_parents_set: HashSet<String> = HashSet::new();
 
-    for (child, parent) in parent_of {
+    for (child, parent) in &parent_of.0 {
         children_map
+            .0
             .entry(parent.clone())
             .or_default()
             .push(child.clone());
@@ -160,7 +163,7 @@ fn build_children_and_roots(
     }
 
     // Sort children within each parent's list for deterministic output
-    for children_list in children_map.values_mut() {
+    for children_list in children_map.0.values_mut() {
         children_list.sort();
     }
 
@@ -181,14 +184,14 @@ fn build_children_and_roots(
 fn print_tree(
     branches_vec: &Vec<BranchInfo>,
     parent_of: &ParentOfMap,
-    children_map: &BTreeMap<String, Vec<String>>,
+    children_map: &ChildrenMap,
     roots: &Vec<String>,
 ) -> Result<(), Error> {
     let mainline_branch_names: HashSet<&str> =
         MAINLINE_BRANCH_NAMES_ARRAY.iter().cloned().collect();
 
     if roots.is_empty() && !branches_vec.is_empty() {
-        if !parent_of.is_empty() {
+        if !&parent_of.0.is_empty() {
             // Structure exists but no clear roots (e.g. cycle, though unlikely)
             eprintln!(
                 "Warning: Could not determine clear root(s) for branch tree. Check for unusual branch structures."
