@@ -8,6 +8,15 @@ const RED_START: &str = "\x1B[91m"; // Bright Red
 const COLOR_RESET: &str = "\x1B[0m";
 const DETACHED_PREFIX_TEXT: &str = "(detached)";
 
+#[derive(Debug, onlyerror::Error)]
+enum Error {
+    #[error("git2 error: {0}")]
+    Git2(#[from] git2::Error),
+
+    #[error("repository is bare")]
+    RepositoryIsBare,
+}
+
 #[derive(Debug, Clone)]
 struct BranchInfo {
     name: String,
@@ -40,7 +49,7 @@ fn print_ascii_tree_recursive(
     }
 }
 
-fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Box<dyn std::error::Error>> {
+fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
     let mut branches_vec: Vec<BranchInfo> = Vec::new();
     let mut branch_iter = repo.branches(Some(BranchType::Local))?;
 
@@ -63,37 +72,20 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Box<dyn std::error
     Ok(branches_vec)
 }
 
-fn do_it() -> Result<(), Box<dyn std::error::Error>> {
-    let repo_path = Repository::discover(".")?
-        .workdir()
-        .ok_or("Repository is bare")?
-        .to_path_buf();
-    let repo = Repository::open(repo_path)?;
-
-    let mainline_branch_names: HashSet<&str> =
-        MAINLINE_BRANCH_NAMES_ARRAY.iter().cloned().collect();
-
-    // 1. Get local branches info (name and OID)
-    let mut branches_vec = get_branches(&repo)?;
-
-    // Sort branch names for deterministic processing
-    branches_vec.sort_by(|a, b| a.name.cmp(&b.name));
-
-    if branches_vec.is_empty() {
-        return Ok(());
-    }
-
-    // 2. Determine parent_of relationships
+fn get_parent_of_relationships(
+    repo: &Repository,
+    branches_vec: &Vec<BranchInfo>,
+) -> Result<HashMap<String, String>, Error> {
     let mut parent_of: HashMap<String, String> = HashMap::new();
 
-    for child_branch_info in &branches_vec {
+    for child_branch_info in branches_vec {
         let child_name = &child_branch_info.name;
         let child_oid = child_branch_info.oid;
 
         let mut current_best_parent_name: Option<String> = None;
         let mut current_best_parent_oid: Option<Oid> = None;
 
-        for potential_parent_info in &branches_vec {
+        for potential_parent_info in branches_vec {
             let potential_parent_name = &potential_parent_info.name;
             let potential_parent_oid = potential_parent_info.oid;
 
@@ -121,14 +113,14 @@ fn do_it() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                                 Err(e) if e.code() == ErrorCode::NotFound => { /* No common base, not ordered */
                                 }
-                                Err(e) => return Err(Box::new(e)),
+                                Err(e) => return Err(Error::Git2(e)),
                                 _ => {}
                             }
                         }
                     }
                 }
                 Err(e) if e.code() == ErrorCode::NotFound => { /* No common base */ }
-                Err(e) => return Err(Box::new(e)),
+                Err(e) => return Err(Error::Git2(e)),
                 _ => {} // Not an ancestor
             }
         }
@@ -136,6 +128,32 @@ fn do_it() -> Result<(), Box<dyn std::error::Error>> {
             parent_of.insert(child_name.clone(), p_name);
         }
     }
+
+    Ok(parent_of)
+}
+
+fn do_it() -> Result<(), Error> {
+    let repo_path = Repository::discover(".")?
+        .workdir()
+        .ok_or(Error::RepositoryIsBare)?
+        .to_path_buf();
+    let repo = Repository::open(repo_path)?;
+
+    let mainline_branch_names: HashSet<&str> =
+        MAINLINE_BRANCH_NAMES_ARRAY.iter().cloned().collect();
+
+    // 1. Get local branches info (name and OID)
+    let mut branches_vec = get_branches(&repo)?;
+
+    // Sort branch names for deterministic processing
+    branches_vec.sort_by(|a, b| a.name.cmp(&b.name));
+
+    if branches_vec.is_empty() {
+        return Ok(());
+    }
+
+    // 2. Determine parent_of relationships
+    let parent_of = get_parent_of_relationships(&repo, &branches_vec)?;
 
     // 3. Build children_map (sorted by key for consistent iteration order) and identify roots
     let mut children_map: BTreeMap<String, Vec<String>> = BTreeMap::new(); // BTreeMap for sorted keys

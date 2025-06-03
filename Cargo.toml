@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 git2 = "0.20.2"
+onlyerror = "0.1.5"
