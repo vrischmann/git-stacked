@@ -83,7 +83,7 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>, Error> {
 // Determines the parent-child relationships between branches based on their OIDs.
 fn get_parent_of_relationships(
     repo: &Repository,
-    branches: &Vec<BranchInfo>,
+    branches: &[BranchInfo],
 ) -> Result<ParentOfMap, Error> {
     let mut parent_of = ParentOfMap(HashMap::new());
 
@@ -115,8 +115,9 @@ fn get_parent_of_relationships(
                                 Ok(base_between_parents_oid)
                                     if base_between_parents_oid == cbp_oid =>
                                 {
-                                    // cbp_oid is an ancestor of potential_parent_oid,
-                                    // meaning potential_parent is more specific/descendant.
+                                    // cbp_oid is an ancestor of potential_parent_oid.
+                                    // This means potential_parent is a "more recent" or "closer"
+                                    // ancestor to the child branch, so we update our best choice.
                                     current_best_parent_name = Some(potential_parent_name.clone());
                                     current_best_parent_oid = Some(potential_parent_oid);
                                 }
@@ -148,7 +149,7 @@ struct ChildrenAndRoots {
 
 // Builds the children_map and identifies root branches based on parent-child relationships.
 fn build_children_and_roots(
-    branches: &Vec<BranchInfo>,
+    branches: &[BranchInfo],
     parent_of: &ParentOfMap,
 ) -> Result<ChildrenAndRoots, Error> {
     let mut children_map = ChildrenMap(BTreeMap::new());
@@ -187,10 +188,10 @@ fn build_children_and_roots(
 
 // Prints the branch tree structure based on the branches, parent-child relationships, and roots.
 fn print_tree(
-    branches: &Vec<BranchInfo>,
+    branches: &[BranchInfo],
     parent_of: &ParentOfMap,
     children_map: &ChildrenMap,
-    roots: &Vec<String>,
+    roots: &[String],
 ) -> Result<(), Error> {
     let mainline_branch_names: HashSet<&str> =
         MAINLINE_BRANCH_NAMES_ARRAY.iter().cloned().collect();
@@ -273,5 +274,8 @@ fn do_it() -> Result<(), Error> {
 }
 
 fn main() {
-    do_it().unwrap()
+    if let Err(e) = do_it() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
 }
